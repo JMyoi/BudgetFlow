@@ -32,7 +32,8 @@ import {
   updateExpense,
 } from "@/lib/api";
 
-const PAGE_LIMIT = 10;
+// The list scrolls instead of paginating, so fetch every matching expense at once.
+const EXPENSE_FETCH_LIMIT = 1000;
 const MONTH_OPTIONS: { value: number; label: string }[] = [
   { value: 1, label: "January" },
   { value: 2, label: "February" },
@@ -126,7 +127,6 @@ function SortButton({
 export default function ExpensesPage() {
   const { user, isCheckingUser } = useRequireUser();
   const [expenseData, setExpenseData] = useState<ExpenseListData | null>(null);
-  const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState<ExpenseSortBy>("date");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [yearFilter, setYearFilter] = useState<number | null>(null);
@@ -182,12 +182,11 @@ export default function ExpensesPage() {
 
   function handleImageImportSaved() {
     setIsImportingImage(false);
-    setPage(1);
     setSortBy("date");
     setSortOrder("desc");
     loadAvailableYears();
 
-    if (page === 1 && sortBy === "date" && sortOrder === "desc") {
+    if (sortBy === "date" && sortOrder === "desc") {
       loadExpenses();
     }
   }
@@ -205,7 +204,7 @@ export default function ExpensesPage() {
 
     setIsLoading(true);
     Promise.all([
-      getExpenses(user.id, page, PAGE_LIMIT, sortBy, sortOrder, filters),
+      getExpenses(user.id, 1, EXPENSE_FETCH_LIMIT, sortBy, sortOrder, filters),
       getExpenseTrend(user.id, filters),
     ])
       .then(([listData, trendData]) => {
@@ -236,7 +235,7 @@ export default function ExpensesPage() {
   useEffect(() => {
     loadExpenses();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, page, sortBy, sortOrder, yearFilter, monthFilter, searchQuery]);
+  }, [user, sortBy, sortOrder, yearFilter, monthFilter, searchQuery]);
 
   useEffect(() => {
     loadAvailableYears();
@@ -246,13 +245,11 @@ export default function ExpensesPage() {
   useEffect(() => {
     const handle = window.setTimeout(() => {
       setSearchQuery(searchInput);
-      setPage(1);
     }, 300);
     return () => window.clearTimeout(handle);
   }, [searchInput]);
 
   function handleYearChange(value: string) {
-    setPage(1);
     if (value === "all") {
       setYearFilter(null);
       setMonthFilter(null);
@@ -262,12 +259,10 @@ export default function ExpensesPage() {
   }
 
   function handleMonthChange(value: string) {
-    setPage(1);
     setMonthFilter(value === "all" ? null : Number(value));
   }
 
   function handleSort(field: ExpenseSortBy) {
-    setPage(1);
     if (sortBy === field) {
       setSortOrder((current) => (current === "asc" ? "desc" : "asc"));
       return;
@@ -311,7 +306,6 @@ export default function ExpensesPage() {
           userId: user.id,
         };
         await createExpense(createPayload);
-        setPage(1);
         setSortBy("date");
         setSortOrder("desc");
       }
@@ -487,112 +481,94 @@ export default function ExpensesPage() {
       )}
 
       <section className="mt-8 overflow-hidden rounded-2xl border border-stone-100 bg-white shadow-sm">
-        <div className="hidden grid-cols-[1fr_2fr_1.5fr_1fr_1fr] gap-4 border-b border-stone-100 bg-stone-50 px-6 py-4 text-sm sm:grid">
-          <SortButton
-            label="Date"
-            field="date"
-            sortBy={sortBy}
-            sortOrder={sortOrder}
-            onSort={handleSort}
-          />
-          <SortButton
-            label="Description"
-            field="title"
-            sortBy={sortBy}
-            sortOrder={sortOrder}
-            onSort={handleSort}
-          />
-          <SortButton
-            label="Category"
-            field="category"
-            sortBy={sortBy}
-            sortOrder={sortOrder}
-            onSort={handleSort}
-          />
-          <SortButton
-            label="Amount"
-            field="amount"
-            sortBy={sortBy}
-            sortOrder={sortOrder}
-            onSort={handleSort}
-          />
-          <span className="text-right font-bold text-stone-500">Actions</span>
+        <div className="max-h-[600px] overflow-y-auto">
+          <div className="sticky top-0 z-10 hidden grid-cols-[1fr_2fr_1.5fr_1fr_1fr] gap-4 border-b border-stone-100 bg-stone-50 px-6 py-4 text-sm sm:grid">
+            <SortButton
+              label="Date"
+              field="date"
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              onSort={handleSort}
+            />
+            <SortButton
+              label="Description"
+              field="title"
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              onSort={handleSort}
+            />
+            <SortButton
+              label="Category"
+              field="category"
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              onSort={handleSort}
+            />
+            <SortButton
+              label="Amount"
+              field="amount"
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              onSort={handleSort}
+            />
+            <span className="text-right font-bold text-stone-500">Actions</span>
+          </div>
+  
+          {isLoading ? (
+            <p className="px-6 py-8 text-stone-500">Loading expenses...</p>
+          ) : expenseData && expenseData.expenses.length > 0 ? (
+            expenseData.expenses.map((expense) => (
+              <div
+                key={expense.id}
+                className="grid gap-4 border-b border-stone-100 px-6 py-5 last:border-b-0 sm:grid-cols-[1fr_2fr_1.5fr_1fr_1fr] sm:items-center"
+              >
+                <p className="font-medium text-stone-600">
+                  {formatDate(expense.date)}
+                </p>
+                <p className="text-lg font-bold text-stone-800">
+                  {expenseLabel(expense)}
+                </p>
+                <div>
+                  <span
+                    className={`inline-flex rounded-xl px-3 py-2 text-sm font-bold ${getCategoryClass(
+                      expense.category,
+                    )}`}
+                  >
+                    {expense.category}
+                  </span>
+                </div>
+                <p className="text-lg font-black text-stone-950">
+                  {formatCurrency(expense.amount)}
+                </p>
+                <div className="flex gap-2 sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setEditingExpense(expense)}
+                    className="rounded-xl bg-amber-50 px-4 py-2 font-bold text-amber-700 hover:bg-amber-100"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeletingExpense(expense)}
+                    className="rounded-xl bg-red-50 px-4 py-2 font-bold text-red-600 hover:bg-red-100"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="px-6 py-8 text-stone-500">No expenses found.</p>
+          )}
         </div>
 
-        {isLoading ? (
-          <p className="px-6 py-8 text-stone-500">Loading expenses...</p>
-        ) : expenseData && expenseData.expenses.length > 0 ? (
-          expenseData.expenses.map((expense) => (
-            <div
-              key={expense.id}
-              className="grid gap-4 border-b border-stone-100 px-6 py-5 last:border-b-0 sm:grid-cols-[1fr_2fr_1.5fr_1fr_1fr] sm:items-center"
-            >
-              <p className="font-medium text-stone-600">
-                {formatDate(expense.date)}
-              </p>
-              <p className="text-lg font-bold text-stone-800">
-                {expenseLabel(expense)}
-              </p>
-              <div>
-                <span
-                  className={`inline-flex rounded-xl px-3 py-2 text-sm font-bold ${getCategoryClass(
-                    expense.category,
-                  )}`}
-                >
-                  {expense.category}
-                </span>
-              </div>
-              <p className="text-lg font-black text-stone-950">
-                {formatCurrency(expense.amount)}
-              </p>
-              <div className="flex gap-2 sm:justify-end">
-                <button
-                  type="button"
-                  onClick={() => setEditingExpense(expense)}
-                  className="rounded-xl bg-amber-50 px-4 py-2 font-bold text-amber-700 hover:bg-amber-100"
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDeletingExpense(expense)}
-                  className="rounded-xl bg-red-50 px-4 py-2 font-bold text-red-600 hover:bg-red-100"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))
-        ) : (
-          <p className="px-6 py-8 text-stone-500">No expenses found.</p>
-        )}
-
         {pagination && pagination.totalRecords > 0 && (
-          <div className="flex flex-col gap-4 border-t border-stone-100 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="border-t border-stone-100 px-6 py-5">
             <p className="font-medium text-stone-400">
-              Showing {pagination.showingFrom}-{pagination.showingTo} of{" "}
+              Showing {expenseData?.expenses.length ?? 0} of{" "}
               {pagination.totalRecords}
             </p>
-            <div className="flex flex-wrap gap-2">
-              {Array.from({ length: pagination.totalPages }, (_, index) => {
-                const pageNumber = index + 1;
-
-                return (
-                  <button
-                    key={pageNumber}
-                    type="button"
-                    onClick={() => setPage(pageNumber)}
-                    className={`h-11 min-w-11 rounded-xl border px-4 font-black ${
-                      page === pageNumber
-                        ? "border-amber-500 bg-amber-500 text-white"
-                        : "border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
-                    }`}
-                  >
-                    {pageNumber}
-                  </button>
-                );
-              })}
-            </div>
           </div>
         )}
       </section>
