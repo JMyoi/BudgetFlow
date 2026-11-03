@@ -9,15 +9,21 @@ import {
 
 interface CategoryDonutChartProps {
   data: CategoryBreakdownEntry[];
+  title?: string;
+  emptyMessage?: string;
 }
 
-export default function CategoryDonutChart({ data }: CategoryDonutChartProps) {
+export default function CategoryDonutChart({
+  data,
+  title = "This Month",
+  emptyMessage = "No expenses recorded this month yet.",
+}: CategoryDonutChartProps) {
   const hasData = data.length > 0;
 
   return (
     <div className="flex h-full flex-col rounded-2xl border border-stone-100 bg-white p-6 shadow-sm">
       <div>
-        <h2 className="text-2xl font-black text-stone-900">This Month</h2>
+        <h2 className="text-2xl font-black text-stone-900">{title}</h2>
         <p className="mt-1 text-sm font-medium text-stone-500">By category</p>
       </div>
 
@@ -85,7 +91,7 @@ export default function CategoryDonutChart({ data }: CategoryDonutChartProps) {
         </>
       ) : (
         <div className="flex flex-1 items-center justify-center py-12 text-center text-stone-400">
-          No expenses recorded this month yet.
+          {emptyMessage}
         </div>
       )}
     </div>

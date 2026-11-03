@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/dashboard/AppShell";
+import CategoryDonutChart from "@/components/dashboard/CategoryDonutChart";
 import ImageImportAction from "@/components/dashboard/ImageImportAction";
 import ImageImportModal from "@/components/dashboard/ImageImportModal";
 import MonthlyTrendChart from "@/components/dashboard/MonthlyTrendChart";
@@ -15,6 +16,7 @@ import {
 } from "@/components/dashboard/format";
 import { useRequireUser } from "@/components/dashboard/useRequireUser";
 import type {
+  CategoryBreakdownEntry,
   CreateExpenseInput,
   Expense,
   ExpenseListData,
@@ -144,6 +146,24 @@ export default function ExpensesPage() {
   const [formError, setFormError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // All filtered expenses are already loaded, so the donut is summed client-side.
+  const categoryBreakdown = useMemo<CategoryBreakdownEntry[]>(() => {
+    const totals = new Map<string, number>();
+    for (const expense of expenseData?.expenses ?? []) {
+      totals.set(
+        expense.category,
+        (totals.get(expense.category) ?? 0) + expense.amount,
+      );
+    }
+
+    return Array.from(totals, ([category, amount]) => ({
+      category,
+      amount: Math.round(amount * 100) / 100,
+    }))
+      .filter((entry) => entry.amount > 0)
+      .sort((a, b) => b.amount - a.amount);
+  }, [expenseData]);
 
   const editForm = useMemo<EditFormState | null>(() => {
     if (!editingExpense) {
@@ -573,11 +593,18 @@ export default function ExpensesPage() {
         )}
       </section>
 
-      <section className="mt-8">
-        <MonthlyTrendChart
-          data={trend?.points ?? []}
-          title={`Spending Trend – ${trendRangeLabel}`}
-          subtitle={trendSubtitle}
+      <section className="mt-8 grid gap-5 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <MonthlyTrendChart
+            data={trend?.points ?? []}
+            title={`Spending Trend – ${trendRangeLabel}`}
+            subtitle={trendSubtitle}
+          />
+        </div>
+        <CategoryDonutChart
+          data={categoryBreakdown}
+          title={trendRangeLabel}
+          emptyMessage="No expenses for this period."
         />
       </section>
 
